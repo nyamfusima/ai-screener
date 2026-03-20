@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant:wght@400;500;600&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #F5F3EE;
+  --surface: #FFFFFF;
+  --surface2: #F9F8F5;
+  --border: #E2DED5;
+  --border-strong: #C8C3B8;
+  --navy: #0F1C2D;
+  --blue: #1A4FD8;
+  --blue-bg: #EEF2FD;
+  --blue-border: #C7D7F9;
+  --muted: #7A7568;
+  --pass: #1A6B3C;
+  --pass-bg: #EBF5EE;
+  --pass-border: #BBE5CC;
+  --reject: #B91C1C;
+  --reject-bg: #FEF0F0;
+  --reject-border: #FBC4C4;
+  --warn: #92400E;
+  --warn-bg: #FEF6E7;
+  --warn-border: #F6D5A0;
+  --serif: 'Cormorant', Georgia, serif;
+  --sans: 'Outfit', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--navy);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+textarea,
+input[type='text'] {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--navy);
+  font-family: var(--sans);
+  font-size: 13.5px;
+  line-height: 1.65;
+  padding: 11px 13px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+textarea:focus,
+input[type='text']:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(26, 79, 216, 0.08);
+}
+
+textarea::placeholder,
+input[type='text']::placeholder {
+  color: #BCB5A8;
+}
+
+input[type='range'] {
+  -webkit-appearance: none;
+  width: 110px;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--navy);
+  cursor: pointer;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--navy);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
