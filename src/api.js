@@ -1,67 +1,80 @@
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
-const MODEL = 'claude-sonnet-4-20250514'
+const GEMINI_API_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
 
 function getApiKey() {
-  const key = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (!key)
+  const key = import.meta.env.VITE_GEMINI_API_KEY
+  if (!key || key === 'your-gemini-api-key-here') {
     throw new Error(
-      'Missing VITE_ANTHROPIC_API_KEY. Add it to your .env file or Vercel environment variables.'
+      'VITE_GEMINI_API_KEY is not set. Add it to your .env file:\nVITE_GEMINI_API_KEY=AIza...'
     )
+  }
   return key
 }
 
 /**
- * Robustly extract a JSON object from a Claude response string.
- * Handles: plain JSON, ```json fences, leading/trailing prose.
+ * Robustly extract a JSON object from a model response string.
  */
 function extractJSON(raw) {
-  if (!raw) throw new Error('Empty response from Claude.')
-
-  // 1. Strip markdown code fences
+  if (!raw) throw new Error('Empty response from Gemini.')
   let cleaned = raw.replace(/```json\s*/gi, '').replace(/```/g, '').trim()
-
-  // 2. Find the first { ... } block (handles prose before/after the JSON)
   const start = cleaned.indexOf('{')
   const end = cleaned.lastIndexOf('}')
   if (start === -1 || end === -1 || end < start) {
     throw new Error(`No JSON object found in response: "${cleaned.slice(0, 120)}"`)
   }
-
-  const jsonStr = cleaned.slice(start, end + 1)
-
   try {
-    return JSON.parse(jsonStr)
+    return JSON.parse(cleaned.slice(start, end + 1))
   } catch (e) {
-    throw new Error(`JSON parse failed: ${e.message}. Raw: "${jsonStr.slice(0, 120)}"`)
+    throw new Error(`JSON parse failed: ${e.message}`)
   }
 }
 
-async function callClaude(prompt) {
-  const res = await fetch(ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': getApiKey(),
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-calls': 'true',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 1024,
-      // System prompt forces JSON-only output at the model level
-      system:
-        'You are a precise JSON API. You MUST respond with only a valid JSON object and nothing else — no explanation, no markdown, no prose before or after the JSON.',
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
+async function callGemini(prompt) {
+  const apiKey = getApiKey()
+
+  let res
+  try {
+    res = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [
+            {
+              text: 'You are a precise JSON API. You MUST respond with only a valid JSON object and nothing else — no explanation, no markdown, no prose before or after the JSON.',
+            },
+          ],
+        },
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 2048,
+        },
+      }),
+    })
+  } catch (networkErr) {
+    throw new Error(`Network request failed: ${networkErr.message}`)
+  }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err?.error?.message || `Anthropic API error ${res.status}`)
+    let errMsg = `Gemini API error ${res.status}`
+    try {
+      const errBody = await res.json()
+      if (errBody?.error?.message) errMsg = errBody.error.message
+    } catch (_) { /* ignore */ }
+    throw new Error(errMsg)
   }
 
   const data = await res.json()
-  const text = data.content?.find((b) => b.type === 'text')?.text ?? ''
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  if (!text) throw new Error('Empty response from Gemini.')
   return text
 }
 
@@ -72,7 +85,6 @@ async function callClaude(prompt) {
  */
 export async function extractCandidateInfo(cvText) {
   const snippet = cvText.slice(0, 4000)
-
   const prompt = `Extract the candidate's full name and most recent job title from this CV.
 
 CV TEXT:
@@ -83,15 +95,13 @@ Return this exact JSON structure:
 
   let raw = ''
   try {
-    raw = await callClaude(prompt)
+    raw = await callGemini(prompt)
     const result = extractJSON(raw)
-
     return {
       name: typeof result.name === 'string' && result.name.trim() ? result.name.trim() : 'Unknown Candidate',
       role: typeof result.role === 'string' && result.role.trim() ? result.role.trim() : 'Unknown Role',
     }
   } catch (e) {
-    // Don't block the whole flow — fall back gracefully
     console.warn('extractCandidateInfo failed:', e.message, '| raw:', raw)
     return { name: 'Unknown Candidate', role: 'Unknown Role' }
   }
@@ -104,9 +114,7 @@ Return this exact JSON structure:
  * @returns {Promise<{ score: number, summary: string, matched_skills: string[], missing_skills: string[] }>}
  */
 export async function scoreApplicant(applicant, jobDescription) {
-  // Trim CV to avoid exceeding context limits
   const cvSnippet = applicant.text.slice(0, 6000)
-
   const prompt = `Score how well this candidate matches the job description. Be objective and precise.
 
 JOB DESCRIPTION:
@@ -127,10 +135,8 @@ Return this exact JSON structure:
 
   let raw = ''
   try {
-    raw = await callClaude(prompt)
+    raw = await callGemini(prompt)
     const result = extractJSON(raw)
-
-    // Validate and sanitise the returned object
     return {
       score: Math.min(100, Math.max(0, Math.round(Number(result.score) || 0))),
       summary: typeof result.summary === 'string' ? result.summary : 'No summary available.',
